@@ -2,7 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { motion } from "motion/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { Route } from "../App";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 
@@ -22,54 +22,16 @@ const NAV_LINKS = [
 interface Quote {
   symbol: string;
   name: string;
-  price: number;
-  change: number;
-  data: number[];
+  tvSymbol: string;
 }
 
 const INITIAL_QUOTES: Quote[] = [
-  {
-    symbol: "EUR/USD",
-    name: "Euro / US Dollar",
-    price: 1.0847,
-    change: 0.32,
-    data: [1.082, 1.083, 1.081, 1.085, 1.084, 1.086, 1.0847],
-  },
-  {
-    symbol: "GBP/USD",
-    name: "British Pound",
-    price: 1.2734,
-    change: -0.18,
-    data: [1.276, 1.275, 1.274, 1.273, 1.274, 1.272, 1.2734],
-  },
-  {
-    symbol: "XAU/USD",
-    name: "Gold Spot",
-    price: 2341.5,
-    change: 0.74,
-    data: [2310, 2318, 2325, 2330, 2338, 2340, 2341.5],
-  },
-  {
-    symbol: "XAG/USD",
-    name: "Silver Spot",
-    price: 29.14,
-    change: 1.12,
-    data: [28.5, 28.7, 28.9, 29.0, 29.1, 29.12, 29.14],
-  },
-  {
-    symbol: "SPX500",
-    name: "S&P 500 Index",
-    price: 5234.18,
-    change: 0.41,
-    data: [5190, 5200, 5210, 5220, 5225, 5230, 5234],
-  },
-  {
-    symbol: "BTC/USD",
-    name: "Bitcoin",
-    price: 67842.0,
-    change: -1.24,
-    data: [69200, 68800, 68500, 68100, 67900, 67850, 67842],
-  },
+  { symbol: "EUR/USD", name: "Euro / US Dollar", tvSymbol: "FX:EURUSD" },
+  { symbol: "GBP/USD", name: "British Pound", tvSymbol: "FX:GBPUSD" },
+  { symbol: "XAU/USD", name: "Gold Spot", tvSymbol: "OANDA:XAUUSD" },
+  { symbol: "XAG/USD", name: "Silver Spot", tvSymbol: "OANDA:XAGUSD" },
+  { symbol: "SPX500", name: "S&P 500 Index", tvSymbol: "SP:SPX" },
+  { symbol: "BTC/USD", name: "Bitcoin", tvSymbol: "BITSTAMP:BTCUSD" },
 ];
 
 const LOCKED_SIGNALS = [
@@ -113,39 +75,6 @@ const FOOTER_LINKS: Array<[string, string[]]> = [
   ["Platform", ["Signals", "Dashboard", "Pricing", "API"]],
   ["Legal", ["Terms", "Privacy", "Disclaimer", "Contact"]],
 ];
-
-function Sparkline({ data, positive }: { data: number[]; positive: boolean }) {
-  const min = Math.min(...data);
-  const max = Math.max(...data);
-  const range = max - min || 1;
-  const W = 80;
-  const H = 28;
-  const pts = data
-    .map((v, i) => {
-      const x = (i / (data.length - 1)) * W;
-      const y = H - ((v - min) / range) * H;
-      return `${x},${y}`;
-    })
-    .join(" ");
-  return (
-    <svg
-      width={W}
-      height={H}
-      className="overflow-visible"
-      aria-hidden="true"
-      role="presentation"
-    >
-      <polyline
-        points={pts}
-        fill="none"
-        stroke={positive ? "oklch(0.72 0.19 145)" : "oklch(0.577 0.245 27)"}
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
 
 function TradingViewTickerTape() {
   const ref = useRef<HTMLDivElement>(null);
@@ -218,26 +147,35 @@ function TradingViewMiniChart({
   return <div ref={ref} style={{ minHeight: 220 }} />;
 }
 
+function TradingViewSingleQuote({ symbol }: { symbol: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!ref.current) return;
+    ref.current.innerHTML = "";
+    const script = document.createElement("script");
+    script.src =
+      "https://s3.tradingview.com/external-embedding/embed-widget-single-quote.js";
+    script.async = true;
+    script.innerHTML = JSON.stringify({
+      symbol,
+      width: "100%",
+      isTransparent: true,
+      colorTheme: "dark",
+      locale: "en",
+    });
+    ref.current.appendChild(script);
+  }, [symbol]);
+  return (
+    <div className="tradingview-widget-container" ref={ref}>
+      <div className="tradingview-widget-container__widget" />
+    </div>
+  );
+}
+
 export default function MarketLanding({ navigate }: Props) {
-  const [quotes, setQuotes] = useState<Quote[]>(INITIAL_QUOTES);
   const { login, loginStatus, identity } = useInternetIdentity();
 
   const isLoggedIn = loginStatus === "success" && !!identity;
-
-  // Simulate live price ticks
-  useEffect(() => {
-    const id = setInterval(() => {
-      setQuotes((prev) =>
-        prev.map((q) => {
-          const delta = q.price * (Math.random() * 0.002 - 0.001);
-          const newPrice = q.price + delta;
-          const newData = [...q.data.slice(1), newPrice];
-          return { ...q, price: newPrice, data: newData };
-        }),
-      );
-    }, 5000);
-    return () => clearInterval(id);
-  }, []);
 
   const handleSubscribe = useCallback(() => {
     navigate("payment");
@@ -298,6 +236,29 @@ export default function MarketLanding({ navigate }: Props) {
           </nav>
 
           <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate("admin")}
+              data-ocid="nav.admin.button"
+              className="border-primary/50 text-primary hover:bg-primary/10"
+            >
+              <svg
+                className="w-3.5 h-3.5 mr-1.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                />
+              </svg>
+              Admin
+            </Button>
             {isLoggedIn ? (
               <Button
                 variant="ghost"
@@ -468,11 +429,11 @@ export default function MarketLanding({ navigate }: Props) {
           >
             <h2 className="text-2xl font-bold mb-2">Live Market Quotes</h2>
             <p className="text-muted-foreground mb-8">
-              Real-time prices updated every 5 seconds
+              Live prices from TradingView
             </p>
           </motion.div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {quotes.map((q, i) => (
+            {INITIAL_QUOTES.map((q, i) => (
               <motion.div
                 key={q.symbol}
                 initial={{ opacity: 0, y: 20 }}
@@ -482,33 +443,7 @@ export default function MarketLanding({ navigate }: Props) {
               >
                 <Card className="glass-card hover:border-primary/40 transition-all">
                   <CardContent className="p-4">
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <div className="font-bold text-sm">{q.symbol}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {q.name}
-                        </div>
-                      </div>
-                      <Badge
-                        className={
-                          q.change >= 0
-                            ? "bg-positive text-positive"
-                            : "bg-negative text-negative"
-                        }
-                        style={{ border: "none" }}
-                      >
-                        {q.change >= 0 ? "+" : ""}
-                        {q.change.toFixed(2)}%
-                      </Badge>
-                    </div>
-                    <div className="flex items-end justify-between">
-                      <span className="text-2xl font-mono font-bold">
-                        {q.price > 100
-                          ? q.price.toFixed(2)
-                          : q.price.toFixed(4)}
-                      </span>
-                      <Sparkline data={q.data} positive={q.change >= 0} />
-                    </div>
+                    <TradingViewSingleQuote symbol={q.tvSymbol} />
                   </CardContent>
                 </Card>
               </motion.div>
@@ -693,6 +628,83 @@ export default function MarketLanding({ navigate }: Props) {
           </motion.div>
         </div>
       </section>
+
+      {/* Admin Access Section */}
+      <motion.section
+        data-ocid="admin.access.section"
+        className="py-14 px-4 border-t border-border"
+        style={{ background: "oklch(0.10 0.02 240)" }}
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.5 }}
+      >
+        <div className="container mx-auto max-w-md">
+          <div
+            className="rounded-2xl border border-primary/20 p-8 text-center"
+            style={{ background: "oklch(0.13 0.025 240)" }}
+          >
+            {/* Shield icon */}
+            <div className="flex items-center justify-center mb-5">
+              <div
+                className="w-16 h-16 rounded-full flex items-center justify-center"
+                style={{ background: "oklch(0.18 0.04 250)" }}
+              >
+                <svg
+                  className="w-8 h-8 text-primary"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                  />
+                </svg>
+              </div>
+            </div>
+
+            <h3 className="text-xl font-semibold mb-2 tracking-tight">
+              Admin Dashboard
+            </h3>
+            <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
+              Site administrators can log in here to manage subscribers and
+              verify crypto payments.
+            </p>
+
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={() => navigate("admin")}
+              data-ocid="admin.access.button"
+              className="border-primary/40 text-primary hover:bg-primary/10 hover:border-primary/60 transition-all w-full sm:w-auto px-8"
+            >
+              <svg
+                className="w-4 h-4 mr-2"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"
+                />
+              </svg>
+              Go to Admin Dashboard
+            </Button>
+
+            <p className="text-xs text-muted-foreground mt-4">
+              Login required · Internet Identity
+            </p>
+          </div>
+        </div>
+      </motion.section>
 
       {/* Footer */}
       <footer

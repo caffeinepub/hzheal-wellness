@@ -15,8 +15,7 @@ import { useActor } from "../hooks/useActor";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 
 const BTC_ADDRESS = "bc1qjul98jt5seacq6ljkrc28ueew69sz79x2m72vm";
-const QR_IMAGE =
-  "/assets/uploads/screenshot_20260325-182124-019d250d-e4fa-7168-a7e9-9a55a3f1456f-2.png";
+const TRC20_ADDRESS = "TV1v2KY7SDmjQE5affXYDsaML3KvKPFDLR";
 
 interface Props {
   navigate: (r: Route) => void;
@@ -30,7 +29,8 @@ export default function CryptoPaymentPage({ navigate }: Props) {
   const [txId, setTxId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<"btc" | "trc20" | null>(null);
+  const [selectedCoin, setSelectedCoin] = useState<"BTC" | "TRC20">("BTC");
 
   const { data: isSubscribed } = useQuery({
     queryKey: ["isSubscribed"],
@@ -55,10 +55,11 @@ export default function CryptoPaymentPage({ navigate }: Props) {
     paymentStatus[0] !== undefined &&
     "pending" in (paymentStatus[0] as CryptoPaymentStatus);
 
-  const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(BTC_ADDRESS).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+  const handleCopy = useCallback((type: "btc" | "trc20") => {
+    const addr = type === "btc" ? BTC_ADDRESS : TRC20_ADDRESS;
+    navigator.clipboard.writeText(addr).then(() => {
+      setCopied(type);
+      setTimeout(() => setCopied(null), 2000);
     });
   }, []);
 
@@ -68,7 +69,7 @@ export default function CryptoPaymentPage({ navigate }: Props) {
     try {
       await (actor as unknown as BackendService).submitCryptoPayment(
         txId.trim(),
-        "BTC",
+        selectedCoin,
       );
       setSubmitted(true);
       toast.success("Payment submitted! Awaiting admin verification.");
@@ -77,7 +78,9 @@ export default function CryptoPaymentPage({ navigate }: Props) {
     } finally {
       setSubmitting(false);
     }
-  }, [actor, txId]);
+  }, [actor, txId, selectedCoin]);
+
+  const currentAddress = selectedCoin === "BTC" ? BTC_ADDRESS : TRC20_ADDRESS;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -120,30 +123,9 @@ export default function CryptoPaymentPage({ navigate }: Props) {
           <div className="text-center space-y-2">
             <h1 className="text-3xl font-bold">Subscribe with Crypto</h1>
             <p className="text-muted-foreground">
-              $1 / month — Pay in Bitcoin (BTC)
+              $1 / month — Pay in Bitcoin (BTC) or TRC-20 (USDT)
             </p>
           </div>
-
-          {/* Not logged in */}
-          {!isLoggedIn && (
-            <Card className="glass-card" data-ocid="payment.login.modal">
-              <CardHeader>
-                <CardTitle>Login Required</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Please log in to subscribe with crypto.
-                </p>
-                <Button
-                  className="w-full bg-primary"
-                  onClick={login}
-                  data-ocid="payment.login.button"
-                >
-                  Log In
-                </Button>
-              </CardContent>
-            </Card>
-          )}
 
           {/* Already subscribed */}
           {isLoggedIn && isSubscribed && (
@@ -195,109 +177,143 @@ export default function CryptoPaymentPage({ navigate }: Props) {
             </Card>
           )}
 
-          {/* Payment form */}
-          {isLoggedIn && !isSubscribed && !isPending && !submitted && (
-            <Card className="glass-card" data-ocid="payment.panel">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <span className="text-orange-400">₿</span> Bitcoin (BTC)
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* QR Code */}
-                <div className="flex flex-col items-center gap-3">
-                  <div className="bg-white p-3 rounded-xl">
-                    <img
-                      src={QR_IMAGE}
-                      alt="BTC Wallet QR Code"
-                      className="w-48 h-48 object-contain"
-                    />
-                  </div>
-                  <Badge variant="outline" className="text-xs">
-                    Scan QR or copy address below
-                  </Badge>
-                </div>
-
-                {/* Address */}
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider">
-                    BTC Wallet Address
-                  </p>
-                  <div className="flex gap-2">
-                    <div
-                      className="flex-1 bg-muted/40 border border-border rounded-md px-3 py-2 text-xs font-mono break-all"
-                      data-ocid="payment.address.panel"
-                    >
-                      {BTC_ADDRESS}
+          {/* Payment form - always visible */}
+          {!(isLoggedIn && isSubscribed) &&
+            !(isLoggedIn && !isSubscribed && (isPending || submitted)) && (
+              <Card className="glass-card" data-ocid="payment.panel">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <span className="text-orange-400">₿</span> Crypto Payment
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Coin selector */}
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider">
+                      Select Coin
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSelectedCoin("BTC")}
+                        className={
+                          selectedCoin === "BTC"
+                            ? "border-orange-500/50 text-orange-400 bg-orange-500/10"
+                            : ""
+                        }
+                        data-ocid="payment.btc.toggle"
+                      >
+                        ₿ BTC
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSelectedCoin("TRC20")}
+                        className={
+                          selectedCoin === "TRC20"
+                            ? "border-green-500/50 text-green-400 bg-green-500/10"
+                            : ""
+                        }
+                        data-ocid="payment.trc20.toggle"
+                      >
+                        ₮ TRC-20 (USDT)
+                      </Button>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleCopy}
-                      className="shrink-0"
-                      data-ocid="payment.copy.button"
-                    >
-                      {copied ? "Copied!" : "Copy"}
-                    </Button>
                   </div>
-                </div>
 
-                {/* Instructions */}
-                <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
-                  <p className="text-sm text-blue-300">
-                    Send exactly <strong>$1 worth of BTC</strong> to the address
-                    above. After sending, paste your Transaction ID below.
-                  </p>
-                </div>
-
-                {/* Coin selector (BTC only) */}
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider">
-                    Coin
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="border-orange-500/50 text-orange-400 bg-orange-500/10"
-                      data-ocid="payment.btc.toggle"
-                    >
-                      ₿ BTC
-                    </Button>
+                  {/* Address */}
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider">
+                      {selectedCoin === "BTC"
+                        ? "BTC Wallet Address"
+                        : "TRC-20 (USDT) Wallet Address"}
+                    </p>
+                    <div className="flex gap-2">
+                      <div
+                        className="flex-1 bg-muted/40 border border-border rounded-md px-3 py-2 text-xs font-mono break-all"
+                        data-ocid="payment.address.panel"
+                      >
+                        {currentAddress}
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          handleCopy(selectedCoin === "BTC" ? "btc" : "trc20")
+                        }
+                        className="shrink-0"
+                        data-ocid="payment.copy.button"
+                      >
+                        {copied === (selectedCoin === "BTC" ? "btc" : "trc20")
+                          ? "Copied!"
+                          : "Copy"}
+                      </Button>
+                    </div>
                   </div>
-                </div>
 
-                {/* Transaction ID */}
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider">
-                    Transaction ID
+                  {/* Instructions */}
+                  <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
+                    <p className="text-sm text-blue-300">
+                      Send exactly{" "}
+                      <strong>
+                        $1 worth of{" "}
+                        {selectedCoin === "BTC" ? "BTC" : "USDT (TRC-20)"}
+                      </strong>{" "}
+                      to the address above. After sending, log in and paste your
+                      Transaction ID below.
+                    </p>
+                  </div>
+
+                  {/* Transaction ID submission - requires login */}
+                  {!isLoggedIn ? (
+                    <div className="space-y-3">
+                      <p className="text-sm text-muted-foreground text-center">
+                        After sending payment, log in to submit your Transaction
+                        ID for verification.
+                      </p>
+                      <Button
+                        className="w-full bg-primary"
+                        onClick={login}
+                        data-ocid="payment.login.button"
+                      >
+                        Log In to Submit Payment
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wider">
+                          Transaction ID
+                        </p>
+                        <Input
+                          placeholder="Paste your transaction ID here..."
+                          value={txId}
+                          onChange={(e) => setTxId(e.target.value)}
+                          className="font-mono text-sm"
+                          data-ocid="payment.txid.input"
+                        />
+                      </div>
+
+                      <Button
+                        className="w-full bg-primary glow-blue"
+                        size="lg"
+                        onClick={handleSubmit}
+                        disabled={submitting || !txId.trim()}
+                        data-ocid="payment.submit.button"
+                      >
+                        {submitting ? "Submitting..." : "Submit Payment"}
+                      </Button>
+                    </div>
+                  )}
+
+                  <p className="text-xs text-muted-foreground text-center">
+                    Admin will verify your payment within 24 hours and activate
+                    your access.
                   </p>
-                  <Input
-                    placeholder="Paste your BTC transaction ID here..."
-                    value={txId}
-                    onChange={(e) => setTxId(e.target.value)}
-                    className="font-mono text-sm"
-                    data-ocid="payment.txid.input"
-                  />
-                </div>
-
-                <Button
-                  className="w-full bg-primary glow-blue"
-                  size="lg"
-                  onClick={handleSubmit}
-                  disabled={submitting || !txId.trim()}
-                  data-ocid="payment.submit.button"
-                >
-                  {submitting ? "Submitting..." : "Submit Payment"}
-                </Button>
-
-                <p className="text-xs text-muted-foreground text-center">
-                  Admin will verify your payment within 24 hours and activate
-                  your access.
-                </p>
-              </CardContent>
-            </Card>
-          )}
+                </CardContent>
+              </Card>
+            )}
         </motion.div>
       </main>
 

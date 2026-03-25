@@ -522,77 +522,32 @@ function TradingViewChart({
   );
 }
 
-// ── Signal card (no chart) ──────────────────────────────────────────────────
-function SignalCard({ sig, index }: { sig: Signal; index: number }) {
+function TradingViewSingleQuote({ symbol }: { symbol: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!ref.current) return;
+    ref.current.innerHTML = "";
+    const script = document.createElement("script");
+    script.src =
+      "https://s3.tradingview.com/external-embedding/embed-widget-single-quote.js";
+    script.async = true;
+    script.innerHTML = JSON.stringify({
+      symbol,
+      width: "100%",
+      isTransparent: true,
+      colorTheme: "dark",
+      locale: "en",
+    });
+    ref.current.appendChild(script);
+  }, [symbol]);
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05 }}
-    >
-      <Card
-        className="glass-card hover:border-primary/40 transition-all"
-        data-ocid={`signals.item.${index + 1}`}
-      >
-        <CardContent className="p-5">
-          <div className="flex justify-between items-start mb-4">
-            <div>
-              <div className="font-bold">{sig.symbol}</div>
-              <div className="text-xs text-muted-foreground">{sig.name}</div>
-            </div>
-            <div className="flex gap-2">
-              <Badge
-                className={
-                  sig.direction === "LONG"
-                    ? "bg-positive text-positive"
-                    : "bg-negative text-negative"
-                }
-                style={{ border: "none" }}
-              >
-                {sig.direction}
-              </Badge>
-              <Badge
-                className="bg-primary/20 text-primary"
-                style={{ border: "none" }}
-              >
-                89.9%
-              </Badge>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-y-2 text-sm mb-4">
-            <div className="text-muted-foreground">Entry</div>
-            <div className="font-mono text-right">
-              {sig.entry.toFixed(sig.entry > 100 ? 2 : 4)}
-            </div>
-            <div className="text-muted-foreground">Stop Loss</div>
-            <div className="font-mono text-right text-negative">
-              {sig.sl.toFixed(sig.sl > 100 ? 2 : 4)}
-            </div>
-            <div className="text-muted-foreground">TP1</div>
-            <div className="font-mono text-right text-positive">
-              {sig.tp1.toFixed(sig.tp1 > 100 ? 2 : 4)}
-            </div>
-            <div className="text-muted-foreground">TP2</div>
-            <div className="font-mono text-right text-positive">
-              {sig.tp2.toFixed(sig.tp2 > 100 ? 2 : 4)}
-            </div>
-            <div className="text-muted-foreground">Risk/Reward</div>
-            <div className="font-mono text-right">{sig.rr}</div>
-          </div>
-          <div>
-            <div className="flex justify-between text-xs text-muted-foreground mb-1">
-              <span>Signal Strength</span>
-              <span>{sig.strength}%</span>
-            </div>
-            <Progress value={sig.strength} className="h-1.5" />
-          </div>
-        </CardContent>
-      </Card>
-    </motion.div>
+    <div className="tradingview-widget-container" ref={ref}>
+      <div className="tradingview-widget-container__widget" />
+    </div>
   );
 }
 
-// ── Signal card WITH an embedded TradingView chart below ───────────────────
+// ── Signal card WITH live quote + embedded TradingView chart ───────────────
 function SignalWithChart({ sig, index }: { sig: Signal; index: number }) {
   return (
     <motion.div
@@ -605,7 +560,7 @@ function SignalWithChart({ sig, index }: { sig: Signal; index: number }) {
       <Card className="glass-card hover:border-primary/40 transition-all overflow-hidden">
         {/* Signal info header */}
         <CardContent className="p-5 pb-4">
-          <div className="flex justify-between items-start mb-4">
+          <div className="flex justify-between items-start mb-3">
             <div>
               <div className="font-bold text-lg">{sig.symbol}</div>
               <div className="text-xs text-muted-foreground">{sig.name}</div>
@@ -629,6 +584,12 @@ function SignalWithChart({ sig, index }: { sig: Signal; index: number }) {
               </Badge>
             </div>
           </div>
+          {/* Live real-time price widget */}
+          {sig.tvSymbol && (
+            <div className="mb-4 border border-border/40 rounded-lg overflow-hidden">
+              <TradingViewSingleQuote symbol={sig.tvSymbol} />
+            </div>
+          )}
           <div className="grid grid-cols-4 gap-2 text-xs mb-1">
             <div className="text-center">
               <div className="text-muted-foreground mb-0.5">Entry</div>
@@ -755,26 +716,6 @@ export default function MarketDashboard({ navigate }: Props) {
     enabled: !!actor && !isFetching,
   });
 
-  const [quotes, setQuotes] = useState(
-    SIGNALS.map((s) => ({
-      symbol: s.symbol,
-      price: s.price,
-      change: s.change,
-    })),
-  );
-
-  useEffect(() => {
-    const id = setInterval(() => {
-      setQuotes((prev) =>
-        prev.map((q) => {
-          const delta = q.price * (Math.random() * 0.002 - 0.001);
-          return { ...q, price: q.price + delta };
-        }),
-      );
-    }, 5000);
-    return () => clearInterval(id);
-  }, []);
-
   if (!isLoggedIn) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -874,6 +815,11 @@ export default function MarketDashboard({ navigate }: Props) {
     );
   }
 
+  const liveQuoteSignals = [
+    ...SIGNALS.filter((s) => s.category === "forex"),
+    ...SIGNALS.filter((s) => s.category === "metals"),
+  ];
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header
@@ -944,47 +890,25 @@ export default function MarketDashboard({ navigate }: Props) {
         {/* Live Quotes */}
         <Card className="glass-card mb-8">
           <CardHeader>
-            <CardTitle className="text-base">Live Quotes</CardTitle>
+            <CardTitle className="text-base">
+              Live Quotes — Real-Time from TradingView
+            </CardTitle>
           </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left px-4 py-2 text-muted-foreground font-medium">
-                      Symbol
-                    </th>
-                    <th className="text-right px-4 py-2 text-muted-foreground font-medium">
-                      Price
-                    </th>
-                    <th className="text-right px-4 py-2 text-muted-foreground font-medium">
-                      Change
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {quotes.slice(0, 8).map((q, i) => (
-                    <tr
-                      key={q.symbol}
-                      className="border-b border-border/50 hover:bg-muted/30 transition-colors"
-                      data-ocid={`quotes.item.${i + 1}`}
-                    >
-                      <td className="px-4 py-2 font-medium">{q.symbol}</td>
-                      <td className="px-4 py-2 text-right font-mono">
-                        {q.price > 100
-                          ? q.price.toFixed(2)
-                          : q.price.toFixed(4)}
-                      </td>
-                      <td
-                        className={`px-4 py-2 text-right font-mono ${q.change >= 0 ? "text-positive" : "text-negative"}`}
-                      >
-                        {q.change >= 0 ? "+" : ""}
-                        {q.change.toFixed(2)}%
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          <CardContent className="p-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {liveQuoteSignals.map((sig, i) => (
+                <div
+                  key={sig.symbol}
+                  className="border border-border/50 rounded-lg p-2"
+                  data-ocid={`quotes.item.${i + 1}`}
+                >
+                  {sig.tvSymbol ? (
+                    <TradingViewSingleQuote symbol={sig.tvSymbol} />
+                  ) : (
+                    <span className="text-sm font-medium">{sig.symbol}</span>
+                  )}
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>
@@ -1003,25 +927,25 @@ export default function MarketDashboard({ navigate }: Props) {
             ))}
           </TabsList>
 
-          {/* All Signals — card grid, no inline charts */}
+          {/* All Signals — 2-column grid with charts */}
           <TabsContent value="all">
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               {SIGNALS.map((sig, i) => (
-                <SignalCard key={sig.symbol} sig={sig} index={i} />
+                <SignalWithChart key={sig.symbol} sig={sig} index={i} />
               ))}
             </div>
           </TabsContent>
 
-          {/* Forex — card grid, no inline charts */}
+          {/* Forex — with charts */}
           <TabsContent value="forex">
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               {SIGNALS.filter((s) => s.category === "forex").map((sig, i) => (
-                <SignalCard key={sig.symbol} sig={sig} index={i} />
+                <SignalWithChart key={sig.symbol} sig={sig} index={i} />
               ))}
             </div>
           </TabsContent>
 
-          {/* Metals — signal card + live TradingView chart for each instrument */}
+          {/* Metals — signal card + live TradingView chart */}
           <TabsContent value="metals">
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               {SIGNALS.filter((s) => s.category === "metals").map((sig, i) => (
@@ -1030,7 +954,7 @@ export default function MarketDashboard({ navigate }: Props) {
             </div>
           </TabsContent>
 
-          {/* Indices — signal card + live TradingView chart for each instrument */}
+          {/* Indices — signal card + live TradingView chart */}
           <TabsContent value="indices">
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               {SIGNALS.filter((s) => s.category === "indices").map((sig, i) => (
@@ -1039,11 +963,11 @@ export default function MarketDashboard({ navigate }: Props) {
             </div>
           </TabsContent>
 
-          {/* Shares — card grid */}
+          {/* Shares — with charts */}
           <TabsContent value="shares">
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               {SIGNALS.filter((s) => s.category === "shares").map((sig, i) => (
-                <SignalCard key={sig.symbol} sig={sig} index={i} />
+                <SignalWithChart key={sig.symbol} sig={sig} index={i} />
               ))}
             </div>
           </TabsContent>
