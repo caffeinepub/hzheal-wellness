@@ -1,0 +1,97 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  src: url("/assets/fonts/PlusJakartaSans.woff2") format("woff2");
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@layer base {
+  :root {
+    --radius: 0.5rem;
+    /* Dark fintech theme - deep navy base */
+    --background: 0.12 0.02 240;
+    --foreground: 0.95 0.01 220;
+    --card: 0.16 0.025 235;
+    --card-foreground: 0.95 0.01 220;
+    --popover: 0.16 0.025 235;
+    --popover-foreground: 0.95 0.01 220;
+    --primary: 0.6 0.2 260;
+    --primary-foreground: 0.98 0 0;
+    --secondary: 0.2 0.02 235;
+    --secondary-foreground: 0.75 0.01 220;
+    --muted: 0.18 0.02 235;
+    --muted-foreground: 0.58 0.02 225;
+    --accent: 0.6 0.2 260;
+    --accent-foreground: 0.98 0 0;
+    --destructive: 0.577 0.245 27;
+    --destructive-foreground: 0.98 0 0;
+    --border: 0.22 0.03 235;
+    --input: 0.22 0.03 235;
+    --ring: 0.6 0.2 260;
+    --success: 0.72 0.19 145;
+    --success-foreground: 0.98 0 0;
+    --chart-1: 0.6 0.2 260;
+    --chart-2: 0.72 0.19 145;
+    --chart-3: 0.577 0.245 27;
+    --chart-4: 0.78 0.15 80;
+    --chart-5: 0.5 0.15 300;
+    --sidebar: 0.12 0.02 240;
+    --sidebar-foreground: 0.95 0.01 220;
+    --sidebar-primary: 0.6 0.2 260;
+    --sidebar-primary-foreground: 0.98 0 0;
+    --sidebar-accent: 0.18 0.02 235;
+    --sidebar-accent-foreground: 0.75 0.01 220;
+    --sidebar-border: 0.22 0.03 235;
+    --sidebar-ring: 0.6 0.2 260;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Inter", "Plus Jakarta Sans", sans-serif;
+    background-color: oklch(0.12 0.02 240);
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@layer utilities {
+  .text-positive {
+    color: oklch(0.72 0.19 145);
+  }
+  .text-negative {
+    color: oklch(0.577 0.245 27);
+  }
+  .bg-positive {
+    background-color: oklch(0.72 0.19 145 / 0.15);
+  }
+  .bg-negative {
+    background-color: oklch(0.577 0.245 27 / 0.15);
+  }
+  .glass-card {
+    background: oklch(0.16 0.025 235 / 0.8);
+    backdrop-filter: blur(12px);
+    border: 1px solid oklch(0.22 0.03 235);
+  }
+  .glow-blue {
+    box-shadow: 0 0 20px oklch(0.6 0.2 260 / 0.3);
+  }
+  .sparkline-positive {
+    stroke: oklch(0.72 0.19 145);
+  }
+  .sparkline-negative {
+    stroke: oklch(0.577 0.245 27);
+  }
+}
