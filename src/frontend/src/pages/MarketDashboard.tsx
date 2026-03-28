@@ -7,10 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import type { Route } from "../App";
-import type {
-  _SERVICE as BackendService,
-  CryptoPaymentStatus,
-} from "../declarations/backend.did.d";
+// Legacy declarations removed
 import { useActor } from "../hooks/useActor";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 
@@ -696,8 +693,8 @@ export default function MarketDashboard({ navigate }: Props) {
 
   const { data: paymentStatus } = useQuery({
     queryKey: ["paymentStatus"],
-    queryFn: async (): Promise<[] | [CryptoPaymentStatus]> => {
-      const svc = actor as unknown as BackendService | null;
+    queryFn: async (): Promise<unknown[]> => {
+      const svc = actor as any;
       if (!svc) return [];
       return svc.getMyPaymentStatus();
     },
@@ -709,7 +706,7 @@ export default function MarketDashboard({ navigate }: Props) {
     paymentStatus.length > 0 &&
     paymentStatus[0] !== null &&
     paymentStatus[0] !== undefined &&
-    "pending" in (paymentStatus[0] as CryptoPaymentStatus);
+    "pending" in (paymentStatus[0] as object);
   const { data: isAdmin } = useQuery({
     queryKey: ["isAdmin"],
     queryFn: () => actor?.isCallerAdmin() ?? Promise.resolve(false),

@@ -1,42 +1,59 @@
 import { Toaster } from "@/components/ui/sonner";
-import { useEffect, useState } from "react";
-import CryptoPaymentPage from "./pages/CryptoPaymentPage";
-import MarketAdmin from "./pages/MarketAdmin";
-import MarketDashboard from "./pages/MarketDashboard";
-import MarketLanding from "./pages/MarketLanding";
+import {
+  Outlet,
+  RouterProvider,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from "@tanstack/react-router";
+import EternalBuilderAdmin from "./pages/EternalBuilderAdmin";
+import EternalBuilderLanding from "./pages/EternalBuilderLanding";
+import EternalBuilderWorkspace from "./pages/EternalBuilderWorkspace";
 
-export type Page = "landing" | "catalog" | "tryon" | "pricing";
-export type Route = "landing" | "dashboard" | "admin" | "payment";
+// Legacy type exports used by old pages still in source tree
+export type Page = string;
+export type Route = string;
 
-function getRoute(): Route {
-  const hash = window.location.hash;
-  if (hash === "#admin") return "admin";
-  if (hash === "#dashboard") return "dashboard";
-  if (hash === "#payment") return "payment";
-  return "landing";
+const rootRoute = createRootRoute({
+  component: () => (
+    <>
+      <Outlet />
+      <Toaster richColors position="top-right" />
+    </>
+  ),
+});
+
+const landingRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/",
+  component: EternalBuilderLanding,
+});
+
+const adminRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/admin",
+  component: EternalBuilderAdmin,
+});
+
+const workspaceRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/workspace",
+  component: EternalBuilderWorkspace,
+});
+
+const routeTree = rootRoute.addChildren([
+  landingRoute,
+  adminRoute,
+  workspaceRoute,
+]);
+const router = createRouter({ routeTree });
+
+declare module "@tanstack/react-router" {
+  interface Register {
+    router: typeof router;
+  }
 }
 
 export default function App() {
-  const [route, setRoute] = useState<Route>(getRoute);
-
-  useEffect(() => {
-    const onHash = () => setRoute(getRoute());
-    window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
-  }, []);
-
-  const navigate = (r: Route) => {
-    window.location.hash = r === "landing" ? "" : r;
-    setRoute(r);
-  };
-
-  return (
-    <>
-      {route === "admin" && <MarketAdmin navigate={navigate} />}
-      {route === "dashboard" && <MarketDashboard navigate={navigate} />}
-      {route === "landing" && <MarketLanding navigate={navigate} />}
-      {route === "payment" && <CryptoPaymentPage navigate={navigate} />}
-      <Toaster richColors position="top-center" />
-    </>
-  );
+  return <RouterProvider router={router} />;
 }

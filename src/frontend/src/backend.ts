@@ -94,6 +94,17 @@ export interface http_request_result {
     body: Uint8Array;
     headers: Array<http_header>;
 }
+export interface SalonBooking {
+    id: bigint;
+    service: string;
+    status: Variant_cancelled_pending_confirmed;
+    clientName: string;
+    createdAt: bigint;
+    appointmentDate: string;
+    appointmentTime: string;
+    notes: string;
+    clientPhone: string;
+}
 export interface TransformationOutput {
     status: bigint;
     body: Uint8Array;
@@ -106,9 +117,27 @@ export interface ShoppingItem {
     priceInCents: bigint;
     productDescription: string;
 }
+export interface DentalBooking {
+    id: string;
+    service: string;
+    name: string;
+    createdAt: bigint;
+    email: string;
+    message: string;
+    preferredDate: string;
+    phone: string;
+}
 export interface TransformationInput {
     context: Uint8Array;
     response: http_request_result;
+}
+export interface CryptoPayment {
+    id: bigint;
+    status: Variant_pending_approved_rejected;
+    coin: string;
+    createdAt: bigint;
+    txId: string;
+    user: Principal;
 }
 export interface ClothingItem {
     id: bigint;
@@ -152,19 +181,36 @@ export enum Variant_accessories_dresses_tops_bottoms {
     tops = "tops",
     bottoms = "bottoms"
 }
+export enum Variant_cancelled_pending_confirmed {
+    cancelled = "cancelled",
+    pending = "pending",
+    confirmed = "confirmed"
+}
+export enum Variant_pending_approved_rejected {
+    pending = "pending",
+    approved = "approved",
+    rejected = "rejected"
+}
 export interface backendInterface {
     _initializeAccessControlWithSecret(userSecret: string): Promise<void>;
     activateSubscription(): Promise<void>;
     addClothingItem(item: ClothingItem): Promise<bigint>;
+    approveCryptoPayment(id: bigint): Promise<void>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     clearAllData(): Promise<void>;
     createCheckoutSession(items: Array<ShoppingItem>, successUrl: string, cancelUrl: string): Promise<string>;
     deactivateSubscription(): Promise<void>;
     deleteClothingItem(id: bigint): Promise<void>;
+    deleteDentalBooking(id: bigint): Promise<void>;
+    deleteSalonBooking(id: bigint): Promise<void>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     getClothingCatalog(): Promise<Array<ClothingItem>>;
+    getCryptoPendingPayments(): Promise<Array<CryptoPayment>>;
+    getDentalBookings(): Promise<Array<DentalBooking>>;
     getItemsByCategory(category: Variant_accessories_dresses_tops_bottoms): Promise<Array<ClothingItem>>;
+    getMyPaymentStatus(): Promise<Variant_pending_approved_rejected | null>;
+    getSalonBookings(): Promise<Array<SalonBooking>>;
     getStripeSessionStatus(sessionId: string): Promise<StripeSessionStatus>;
     getTryOnCountToday(): Promise<bigint>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
@@ -172,12 +218,31 @@ export interface backendInterface {
     isStripeConfigured(): Promise<boolean>;
     isSubscribed(): Promise<boolean>;
     recordTryOn(): Promise<void>;
+    rejectCryptoPayment(id: bigint): Promise<void>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
     setStripeConfiguration(config: StripeConfiguration): Promise<void>;
+    submitCryptoPayment(txId: string, coin: string): Promise<bigint>;
+    submitDentalBooking(booking: {
+        service: string;
+        name: string;
+        email: string;
+        message: string;
+        preferredDate: string;
+        phone: string;
+    }): Promise<string>;
+    submitSalonBooking(booking: {
+        service: string;
+        clientName: string;
+        appointmentDate: string;
+        appointmentTime: string;
+        notes: string;
+        clientPhone: string;
+    }): Promise<bigint>;
     transform(input: TransformationInput): Promise<TransformationOutput>;
     updateClothingItem(item: ClothingItem): Promise<void>;
+    updateSalonBookingStatus(id: bigint, status: Variant_cancelled_pending_confirmed): Promise<void>;
 }
-import type { ClothingItem as _ClothingItem, StripeSessionStatus as _StripeSessionStatus, UserProfile as _UserProfile, UserRole as _UserRole } from "./declarations/backend.did.d.ts";
+import type { ClothingItem as _ClothingItem, CryptoPayment as _CryptoPayment, SalonBooking as _SalonBooking, StripeSessionStatus as _StripeSessionStatus, UserProfile as _UserProfile, UserRole as _UserRole } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
     constructor(private actor: ActorSubclass<_SERVICE>, private _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, private _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, private processError?: (error: unknown) => never){}
     async _initializeAccessControlWithSecret(arg0: string): Promise<void> {
@@ -219,6 +284,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.addClothingItem(to_candid_ClothingItem_n1(this._uploadFile, this._downloadFile, arg0));
+            return result;
+        }
+    }
+    async approveCryptoPayment(arg0: bigint): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.approveCryptoPayment(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.approveCryptoPayment(arg0);
             return result;
         }
     }
@@ -292,6 +371,34 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async deleteDentalBooking(arg0: bigint): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.deleteDentalBooking(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.deleteDentalBooking(arg0);
+            return result;
+        }
+    }
+    async deleteSalonBooking(arg0: bigint): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.deleteSalonBooking(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.deleteSalonBooking(arg0);
+            return result;
+        }
+    }
     async getCallerUserProfile(): Promise<UserProfile | null> {
         if (this.processError) {
             try {
@@ -334,6 +441,34 @@ export class Backend implements backendInterface {
             return from_candid_vec_n9(this._uploadFile, this._downloadFile, result);
         }
     }
+    async getCryptoPendingPayments(): Promise<Array<CryptoPayment>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getCryptoPendingPayments();
+                return from_candid_vec_n13(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getCryptoPendingPayments();
+            return from_candid_vec_n13(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async getDentalBookings(): Promise<Array<DentalBooking>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getDentalBookings();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getDentalBookings();
+            return result;
+        }
+    }
     async getItemsByCategory(arg0: Variant_accessories_dresses_tops_bottoms): Promise<Array<ClothingItem>> {
         if (this.processError) {
             try {
@@ -348,18 +483,46 @@ export class Backend implements backendInterface {
             return from_candid_vec_n9(this._uploadFile, this._downloadFile, result);
         }
     }
+    async getMyPaymentStatus(): Promise<Variant_pending_approved_rejected | null> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getMyPaymentStatus();
+                return from_candid_opt_n17(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getMyPaymentStatus();
+            return from_candid_opt_n17(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async getSalonBookings(): Promise<Array<SalonBooking>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getSalonBookings();
+                return from_candid_vec_n18(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getSalonBookings();
+            return from_candid_vec_n18(this._uploadFile, this._downloadFile, result);
+        }
+    }
     async getStripeSessionStatus(arg0: string): Promise<StripeSessionStatus> {
         if (this.processError) {
             try {
                 const result = await this.actor.getStripeSessionStatus(arg0);
-                return from_candid_StripeSessionStatus_n13(this._uploadFile, this._downloadFile, result);
+                return from_candid_StripeSessionStatus_n22(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
             const result = await this.actor.getStripeSessionStatus(arg0);
-            return from_candid_StripeSessionStatus_n13(this._uploadFile, this._downloadFile, result);
+            return from_candid_StripeSessionStatus_n22(this._uploadFile, this._downloadFile, result);
         }
     }
     async getTryOnCountToday(): Promise<bigint> {
@@ -446,6 +609,20 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async rejectCryptoPayment(arg0: bigint): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.rejectCryptoPayment(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.rejectCryptoPayment(arg0);
+            return result;
+        }
+    }
     async saveCallerUserProfile(arg0: UserProfile): Promise<void> {
         if (this.processError) {
             try {
@@ -471,6 +648,62 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.setStripeConfiguration(arg0);
+            return result;
+        }
+    }
+    async submitCryptoPayment(arg0: string, arg1: string): Promise<bigint> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.submitCryptoPayment(arg0, arg1);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.submitCryptoPayment(arg0, arg1);
+            return result;
+        }
+    }
+    async submitDentalBooking(arg0: {
+        service: string;
+        name: string;
+        email: string;
+        message: string;
+        preferredDate: string;
+        phone: string;
+    }): Promise<string> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.submitDentalBooking(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.submitDentalBooking(arg0);
+            return result;
+        }
+    }
+    async submitSalonBooking(arg0: {
+        service: string;
+        clientName: string;
+        appointmentDate: string;
+        appointmentTime: string;
+        notes: string;
+        clientPhone: string;
+    }): Promise<bigint> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.submitSalonBooking(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.submitSalonBooking(arg0);
             return result;
         }
     }
@@ -502,17 +735,46 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async updateSalonBookingStatus(arg0: bigint, arg1: Variant_cancelled_pending_confirmed): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.updateSalonBookingStatus(arg0, to_candid_variant_n26(this._uploadFile, this._downloadFile, arg1));
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.updateSalonBookingStatus(arg0, to_candid_variant_n26(this._uploadFile, this._downloadFile, arg1));
+            return result;
+        }
+    }
 }
 function from_candid_ClothingItem_n10(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _ClothingItem): ClothingItem {
     return from_candid_record_n11(_uploadFile, _downloadFile, value);
 }
-function from_candid_StripeSessionStatus_n13(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _StripeSessionStatus): StripeSessionStatus {
-    return from_candid_variant_n14(_uploadFile, _downloadFile, value);
+function from_candid_CryptoPayment_n14(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _CryptoPayment): CryptoPayment {
+    return from_candid_record_n15(_uploadFile, _downloadFile, value);
+}
+function from_candid_SalonBooking_n19(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _SalonBooking): SalonBooking {
+    return from_candid_record_n20(_uploadFile, _downloadFile, value);
+}
+function from_candid_StripeSessionStatus_n22(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _StripeSessionStatus): StripeSessionStatus {
+    return from_candid_variant_n23(_uploadFile, _downloadFile, value);
 }
 function from_candid_UserRole_n7(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _UserRole): UserRole {
     return from_candid_variant_n8(_uploadFile, _downloadFile, value);
 }
-function from_candid_opt_n16(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [string]): string | null {
+function from_candid_opt_n17(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [{
+        pending: null;
+    } | {
+        approved: null;
+    } | {
+        rejected: null;
+    }]): Variant_pending_approved_rejected | null {
+    return value.length === 0 ? null : from_candid_variant_n16(_uploadFile, _downloadFile, value[0]);
+}
+function from_candid_opt_n25(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [string]): string | null {
     return value.length === 0 ? null : value[0];
 }
 function from_candid_opt_n6(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [_UserProfile]): UserProfile | null {
@@ -551,6 +813,75 @@ function from_candid_record_n11(_uploadFile: (file: ExternalBlob) => Promise<Uin
     };
 }
 function from_candid_record_n15(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+    id: bigint;
+    status: {
+        pending: null;
+    } | {
+        approved: null;
+    } | {
+        rejected: null;
+    };
+    coin: string;
+    createdAt: bigint;
+    txId: string;
+    user: Principal;
+}): {
+    id: bigint;
+    status: Variant_pending_approved_rejected;
+    coin: string;
+    createdAt: bigint;
+    txId: string;
+    user: Principal;
+} {
+    return {
+        id: value.id,
+        status: from_candid_variant_n16(_uploadFile, _downloadFile, value.status),
+        coin: value.coin,
+        createdAt: value.createdAt,
+        txId: value.txId,
+        user: value.user
+    };
+}
+function from_candid_record_n20(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+    id: bigint;
+    service: string;
+    status: {
+        cancelled: null;
+    } | {
+        pending: null;
+    } | {
+        confirmed: null;
+    };
+    clientName: string;
+    createdAt: bigint;
+    appointmentDate: string;
+    appointmentTime: string;
+    notes: string;
+    clientPhone: string;
+}): {
+    id: bigint;
+    service: string;
+    status: Variant_cancelled_pending_confirmed;
+    clientName: string;
+    createdAt: bigint;
+    appointmentDate: string;
+    appointmentTime: string;
+    notes: string;
+    clientPhone: string;
+} {
+    return {
+        id: value.id,
+        service: value.service,
+        status: from_candid_variant_n21(_uploadFile, _downloadFile, value.status),
+        clientName: value.clientName,
+        createdAt: value.createdAt,
+        appointmentDate: value.appointmentDate,
+        appointmentTime: value.appointmentTime,
+        notes: value.notes,
+        clientPhone: value.clientPhone
+    };
+}
+function from_candid_record_n24(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
     userPrincipal: [] | [string];
     response: string;
 }): {
@@ -558,7 +889,7 @@ function from_candid_record_n15(_uploadFile: (file: ExternalBlob) => Promise<Uin
     response: string;
 } {
     return {
-        userPrincipal: record_opt_to_undefined(from_candid_opt_n16(_uploadFile, _downloadFile, value.userPrincipal)),
+        userPrincipal: record_opt_to_undefined(from_candid_opt_n25(_uploadFile, _downloadFile, value.userPrincipal)),
         response: value.response
     };
 }
@@ -573,7 +904,25 @@ function from_candid_variant_n12(_uploadFile: (file: ExternalBlob) => Promise<Ui
 }): Variant_accessories_dresses_tops_bottoms {
     return "accessories" in value ? Variant_accessories_dresses_tops_bottoms.accessories : "dresses" in value ? Variant_accessories_dresses_tops_bottoms.dresses : "tops" in value ? Variant_accessories_dresses_tops_bottoms.tops : "bottoms" in value ? Variant_accessories_dresses_tops_bottoms.bottoms : value;
 }
-function from_candid_variant_n14(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+function from_candid_variant_n16(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+    pending: null;
+} | {
+    approved: null;
+} | {
+    rejected: null;
+}): Variant_pending_approved_rejected {
+    return "pending" in value ? Variant_pending_approved_rejected.pending : "approved" in value ? Variant_pending_approved_rejected.approved : "rejected" in value ? Variant_pending_approved_rejected.rejected : value;
+}
+function from_candid_variant_n21(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+    cancelled: null;
+} | {
+    pending: null;
+} | {
+    confirmed: null;
+}): Variant_cancelled_pending_confirmed {
+    return "cancelled" in value ? Variant_cancelled_pending_confirmed.cancelled : "pending" in value ? Variant_cancelled_pending_confirmed.pending : "confirmed" in value ? Variant_cancelled_pending_confirmed.confirmed : value;
+}
+function from_candid_variant_n23(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
     completed: {
         userPrincipal: [] | [string];
         response: string;
@@ -596,7 +945,7 @@ function from_candid_variant_n14(_uploadFile: (file: ExternalBlob) => Promise<Ui
 } {
     return "completed" in value ? {
         __kind__: "completed",
-        completed: from_candid_record_n15(_uploadFile, _downloadFile, value.completed)
+        completed: from_candid_record_n24(_uploadFile, _downloadFile, value.completed)
     } : "failed" in value ? {
         __kind__: "failed",
         failed: value.failed
@@ -610,6 +959,12 @@ function from_candid_variant_n8(_uploadFile: (file: ExternalBlob) => Promise<Uin
     guest: null;
 }): UserRole {
     return "admin" in value ? UserRole.admin : "user" in value ? UserRole.user : "guest" in value ? UserRole.guest : value;
+}
+function from_candid_vec_n13(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Array<_CryptoPayment>): Array<CryptoPayment> {
+    return value.map((x)=>from_candid_CryptoPayment_n14(_uploadFile, _downloadFile, x));
+}
+function from_candid_vec_n18(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Array<_SalonBooking>): Array<SalonBooking> {
+    return value.map((x)=>from_candid_SalonBooking_n19(_uploadFile, _downloadFile, x));
 }
 function from_candid_vec_n9(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Array<_ClothingItem>): Array<ClothingItem> {
     return value.map((x)=>from_candid_ClothingItem_n10(_uploadFile, _downloadFile, x));
@@ -651,6 +1006,21 @@ function to_candid_record_n2(_uploadFile: (file: ExternalBlob) => Promise<Uint8A
         imageUrl: value.imageUrl,
         category: to_candid_variant_n3(_uploadFile, _downloadFile, value.category)
     };
+}
+function to_candid_variant_n26(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Variant_cancelled_pending_confirmed): {
+    cancelled: null;
+} | {
+    pending: null;
+} | {
+    confirmed: null;
+} {
+    return value == Variant_cancelled_pending_confirmed.cancelled ? {
+        cancelled: null
+    } : value == Variant_cancelled_pending_confirmed.pending ? {
+        pending: null
+    } : value == Variant_cancelled_pending_confirmed.confirmed ? {
+        confirmed: null
+    } : value;
 }
 function to_candid_variant_n3(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Variant_accessories_dresses_tops_bottoms): {
     accessories: null;

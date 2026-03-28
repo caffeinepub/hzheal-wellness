@@ -1,12 +1,15 @@
 import AccessControl "authorization/access-control";
 import MixinAuthorization "authorization/MixinAuthorization";
 import Map "mo:core/Map";
+import List "mo:core/List";
+import Iter "mo:core/Iter";
 import Text "mo:core/Text";
-import Runtime "mo:core/Runtime";
-import Array "mo:core/Array";
 import Time "mo:core/Time";
 import Nat "mo:core/Nat";
 import Principal "mo:core/Principal";
+import Stripe "stripe/stripe";
+import OutCall "http-outcalls/outcall";
+import Runtime "mo:core/Runtime";
 
 actor {
   // ----- Types -----
@@ -53,6 +56,18 @@ actor {
     createdAt : Int;
   };
 
+  public type SalonBooking = {
+    id : Nat;
+    clientName : Text;
+    clientPhone : Text;
+    service : Text;
+    appointmentDate : Text;
+    appointmentTime : Text;
+    notes : Text;
+    status : { #pending; #confirmed; #cancelled };
+    createdAt : Int;
+  };
+
   let dailyFreeLimit = 3;
 
   // ----- State -----
@@ -61,22 +76,68 @@ actor {
 
   let userProfiles = Map.empty<Principal, UserProfile>();
 
-  // Kept for upgrade compatibility with previous version (was used by Stripe)
   var subscriptionMonthlyCostCents : Nat = 1000;
-  var configuration : ?{ allowedCountries : [Text]; secretKey : Text } = null;
 
   var nextClothingId : Nat = 0;
   let clothingCatalog = Map.empty<Nat, ClothingItem>();
   let tryOnTracking = Map.empty<Principal, TryOnSession>();
   let subscribers = Map.empty<Principal, Bool>();
 
-  // Dental bookings
   var nextBookingId : Nat = 0;
   let dentalBookings = Map.empty<Nat, DentalBooking>();
 
-  // Crypto payments
   var nextCryptoPaymentId : Nat = 0;
   let cryptoPayments = Map.empty<Nat, CryptoPayment>();
+
+  // Salon bookings
+  var nextSalonBookingId : Nat = 0;
+  let salonBookings = Map.empty<Nat, SalonBooking>();
+
+  // ------ Stripe Integration -----
+  var configuration : ?Stripe.StripeConfiguration = null;
+
+  public query func isStripeConfigured() : async Bool {
+    configuration != null;
+  };
+
+  public shared ({ caller }) func setStripeConfiguration(config : Stripe.StripeConfiguration) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can perform this action");
+    };
+    configuration := ?config;
+  };
+
+  func getStripeConfiguration() : Stripe.StripeConfiguration {
+    switch (configuration) {
+      case (null) { Runtime.trap("Stripe needs to be first configured") };
+      case (?value) { value };
+    };
+  };
+
+  public func getStripeSessionStatus(sessionId : Text) : async Stripe.StripeSessionStatus {
+    await Stripe.getSessionStatus(getStripeConfiguration(), sessionId, transform);
+  };
+
+  public shared ({ caller }) func createCheckoutSession(items : [Stripe.ShoppingItem], successUrl : Text, cancelUrl : Text) : async Text {
+    await Stripe.createCheckoutSession(getStripeConfiguration(), caller, items, successUrl, cancelUrl, transform);
+  };
+
+  public query func transform(input : OutCall.TransformationInput) : async OutCall.TransformationOutput {
+    OutCall.transform(input);
+  };
+
+  // ----- Admin Setup -----
+  // If no admin has been assigned yet, the caller becomes admin.
+  // This is a one-time setup function -- once an admin exists, it does nothing.
+  public shared ({ caller }) func claimAdminIfNone() : async Bool {
+    if (caller.isAnonymous()) { return false };
+    if (not accessControlState.adminAssigned) {
+      accessControlState.userRoles.add(caller, #admin);
+      accessControlState.adminAssigned := true;
+      return true;
+    };
+    return false;
+  };
 
   // ----- User Profile Management -----
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
@@ -143,12 +204,20 @@ actor {
 
   // ----- Subscription Management -----
   public query ({ caller }) func isSubscribed() : async Bool {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can check subscription status");
-    };
-    switch (subscribers.get(caller)) {
-      case (?true) { true };
-      case (_) { false };
+    let role = AccessControl.getUserRole(accessControlState, caller);
+    switch (role) {
+      case (#user) { true };
+      case (#admin) { true };
+      case (#guest) {
+        // Check if caller has an approved crypto payment
+        var hasApproved = false;
+        for (p in cryptoPayments.values()) {
+          if (p.user == caller and p.status == #approved) {
+            hasApproved := true;
+          };
+        };
+        hasApproved
+      };
     };
   };
 
@@ -173,35 +242,22 @@ actor {
     };
     let currentDate = (Time.now() / 1_000_000_000) / (60 * 60 * 24);
     let session = switch (tryOnTracking.get(caller)) {
-      case (null) {
-        {
-          date = currentDate;
-          dailyCount = 1;
-        };
-      };
+      case (null) { { date = currentDate; dailyCount = 1 } };
       case (?existing) {
         if (existing.date == currentDate) {
-          {
-            existing with dailyCount = existing.dailyCount + 1;
-          };
+          { existing with dailyCount = existing.dailyCount + 1 };
         } else {
-          {
-            date = currentDate;
-            dailyCount = 1;
-          };
+          { date = currentDate; dailyCount = 1 };
         };
       };
     };
-
     let isUserSubscribed = switch (subscribers.get(caller)) {
       case (?true) { true };
       case (_) { false };
     };
-
     if (session.dailyCount > dailyFreeLimit and not isUserSubscribed) {
-      Runtime.trap("Non-subscribed users can only try on " # dailyFreeLimit.toText() # " items per day. Please subscribe for unlimited access.");
+      Runtime.trap("Non-subscribed users can only try on " # dailyFreeLimit.toText() # " items per day.");
     };
-
     tryOnTracking.add(caller, session);
   };
 
@@ -213,11 +269,7 @@ actor {
     switch (tryOnTracking.get(caller)) {
       case (null) { 0 };
       case (?session) {
-        if (session.date == currentDate) {
-          session.dailyCount;
-        } else {
-          0;
-        };
+        if (session.date == currentDate) { session.dailyCount } else { 0 };
       };
     };
   };
@@ -263,19 +315,18 @@ actor {
 
   // ----- Crypto Payment Management -----
   public shared ({ caller }) func submitCryptoPayment(txId : Text, coin : Text) : async Nat {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can submit payments");
-    };
     let id = nextCryptoPaymentId;
     nextCryptoPaymentId += 1;
+    // Auto-approve immediately and grant access
     cryptoPayments.add(id, {
       id;
       user = caller;
       txId;
       coin;
-      status = #pending;
+      status = #approved;
       createdAt = Time.now();
     });
+    subscribers.add(caller, true);
     id;
   };
 
@@ -294,6 +345,8 @@ actor {
       case (null) { Runtime.trap("Payment not found") };
       case (?p) {
         cryptoPayments.add(id, { p with status = #approved });
+        // Grant subscriber role (user role) to the payment submitter
+        AccessControl.assignRole(accessControlState, caller, p.user, #user);
         subscribers.add(p.user, true);
       };
     };
@@ -312,10 +365,7 @@ actor {
   };
 
   public query ({ caller }) func getMyPaymentStatus() : async ?{ #pending; #approved; #rejected } {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized");
-    };
-    // Find the latest payment by this user
+    // Allow any caller to check their own payment status
     var latest : ?CryptoPayment = null;
     for (p in cryptoPayments.values()) {
       if (p.user == caller) {
@@ -331,6 +381,55 @@ actor {
     };
   };
 
+  // ----- Salon Booking Management -----
+  public shared func submitSalonBooking(booking : {
+    clientName : Text;
+    clientPhone : Text;
+    service : Text;
+    appointmentDate : Text;
+    appointmentTime : Text;
+    notes : Text;
+  }) : async Nat {
+    let id = nextSalonBookingId;
+    nextSalonBookingId += 1;
+    salonBookings.add(id, {
+      id;
+      clientName = booking.clientName;
+      clientPhone = booking.clientPhone;
+      service = booking.service;
+      appointmentDate = booking.appointmentDate;
+      appointmentTime = booking.appointmentTime;
+      notes = booking.notes;
+      status = #pending;
+      createdAt = Time.now();
+    });
+    id;
+  };
+
+  public query ({ caller }) func getSalonBookings() : async [SalonBooking] {
+    if (not (AccessControl.isAdmin(accessControlState, caller))) {
+      Runtime.trap("Unauthorized: Only admins can view salon bookings");
+    };
+    salonBookings.values().toArray();
+  };
+
+  public shared ({ caller }) func updateSalonBookingStatus(id : Nat, status : { #pending; #confirmed; #cancelled }) : async () {
+    if (not (AccessControl.isAdmin(accessControlState, caller))) {
+      Runtime.trap("Unauthorized: Only admins can update salon bookings");
+    };
+    switch (salonBookings.get(id)) {
+      case (null) { Runtime.trap("Booking not found") };
+      case (?b) { salonBookings.add(id, { b with status }) };
+    };
+  };
+
+  public shared ({ caller }) func deleteSalonBooking(id : Nat) : async () {
+    if (not (AccessControl.isAdmin(accessControlState, caller))) {
+      Runtime.trap("Unauthorized: Only admins can delete salon bookings");
+    };
+    salonBookings.remove(id);
+  };
+
   // ----- Utility -----
   public shared ({ caller }) func clearAllData() : async () {
     if (not (AccessControl.isAdmin(accessControlState, caller))) {
@@ -342,9 +441,11 @@ actor {
     userProfiles.clear();
     dentalBookings.clear();
     cryptoPayments.clear();
+    salonBookings.clear();
     nextClothingId := 0;
     nextBookingId := 0;
     nextCryptoPaymentId := 0;
+    nextSalonBookingId := 0;
     configuration := null;
   };
 };
